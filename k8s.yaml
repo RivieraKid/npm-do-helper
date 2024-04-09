@@ -1,0 +1,79 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: do-token
+type: Opaque
+data:
+  token: <DIGITALOCEAN_API_TOKEN>
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: do-helper-npm
+type: Opaque
+data:
+  username: <NPM_USERNAME_BASE64_ENCODED>
+  password: <NPM_PASSWORD_BASE64_ENCODED>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: default
+  labels:
+    app: nginx
+spec:
+  selector:
+    matchLabels:
+      app: nginx
+  template:
+    metadata:
+      name: nginx
+      labels:
+        app: nginx
+    spec:
+      serviceAccountName: do-npm-helper
+      containers:
+        - name: nginx
+          image: nginx
+      initContainers:
+        - name: do-npm-helper
+          image: <IMAGE_NAME_AND_TAG>
+          env:
+            - name: SERVICENAME
+              value: nginx
+            - name: DIGITALOCEAN_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: do-token
+                  key: token
+            - name: NPM_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: do-helper-npm
+                  key: username
+            - name: NPM_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: do-helper-npm
+                  key: password
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: NPMINSTANCE
+              value: <HOSTNAME_OF_NPM>
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  labels:
+    app: nginx
+spec:
+  selector:
+    app: nginx
+  ports:
+  - port: 80
+    targetPort: 80
